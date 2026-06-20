@@ -232,7 +232,12 @@ install_cron() {
         echo "Cron entry already present — skipping"
         return
     fi
-    ( crontab -l 2>/dev/null; echo "${cron_line}" ) | crontab -
+    # crontab - (stdin) is not universally supported; use a temp file instead
+    local tmpfile
+    tmpfile=$(mktemp)
+    ( crontab -l 2>/dev/null || true; echo "${cron_line}" ) > "${tmpfile}"
+    crontab "${tmpfile}"
+    rm -f "${tmpfile}"
     echo "Added cron entry: ${cron_line}"
 }
 
