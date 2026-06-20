@@ -283,7 +283,34 @@ do_install() {
     esac
 
     mkdir -p "$(dirname "${script_dest}")"
-    cp "$0" "${script_dest}"
+
+    # When piped through curl | bash, $0 is 'bash' not the script file.
+    # In that case download directly to the destination.
+    if [ -f "$0" ]; then
+        cp "$0" "${script_dest}"
+    else
+        echo "Downloading script to ${script_dest}..."
+        if command -v curl >/dev/null 2>&1; then
+            curl --silent --fail --show-error \
+                --max-time "${DOWNLOAD_TIMEOUT}" \
+                --output "${script_dest}" \
+                "${SCRIPT_URL}" || {
+                echo "ERROR: failed to download script from ${SCRIPT_URL}" >&2
+                return 1
+            }
+        elif command -v wget >/dev/null 2>&1; then
+            wget --quiet --timeout="${DOWNLOAD_TIMEOUT}" \
+                --output-document="${script_dest}" \
+                "${SCRIPT_URL}" || {
+                echo "ERROR: failed to download script from ${SCRIPT_URL}" >&2
+                return 1
+            }
+        else
+            echo "ERROR: neither curl nor wget available" >&2
+            return 1
+        fi
+    fi
+
     chmod 755 "${script_dest}"
     echo "Installed to: ${script_dest}"
 
