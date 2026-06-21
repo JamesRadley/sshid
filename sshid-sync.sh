@@ -231,17 +231,46 @@ install_cron() {
     local script_path="$1"
     local cron_line="0 * * * * ${script_path}"
 
-    if crontab -l 2>/dev/null | grep -qF "sshid-sync"; then
-        echo "Cron entry already present — skipping"
-        return
+    if command -v crontab >/dev/null 2>&1; then
+        # Standard crontab approach
+        if crontab -l 2>/dev/null | grep -qF "sshid-sync"; then
+            echo "Cron entry already present — skipping"
+            return
+        fi
+        # crontab - (stdin) is not universally supported; use a temp file
+        local tmpfile
+        tmpfile=$(mktemp)
+        ( crontab -l 2>/dev/null || true; echo "${cron_line}" ) > "${tmpfile}"
+        crontab "${tmpfile}"
+        rm -f "${tmpfile}"
+        echo "Added cron entry: ${cron_line}"
+    else
+        # Fallback for Synology and other systems without the crontab binary.
+        # Cron still runs and reads /var/spool/cron/crontabs/<user> directly.
+        local cron_user
+        cron_user="${USER:-$(id -un)}"
+        local crontab_dir="/var/spool/cron/crontabs"
+        local crontab_file="${crontab_dir}/${cron_user}"
+
+        if [ -f "${crontab_file}" ] && grep -qF "sshid-sync" "${crontab_file}" 2>/dev/null; then
+            echo "Cron entry already present — skipping"
+            return
+        fi
+
+        if mkdir -p "${crontab_dir}" 2>/dev/null \
+           && echo "${cron_line}" >> "${crontab_file}" 2>/dev/null; then
+            chmod 600 "${crontab_file}" 2>/dev/null || true
+            # Signal crond to reload if we can find its PID
+            for pidfile in /var/run/crond.pid /var/run/cron.pid; do
+                [ -f "${pidfile}" ] && kill -HUP "$(cat "${pidfile}")" 2>/dev/null && break
+            done
+            echo "Added cron entry to ${crontab_file}: ${cron_line}"
+        else
+            echo "WARNING: could not write crontab automatically."
+            echo "Add this line to your crontab manually:"
+            echo "  ${cron_line}"
+        fi
     fi
-    # crontab - (stdin) is not universally supported; use a temp file instead
-    local tmpfile
-    tmpfile=$(mktemp)
-    ( crontab -l 2>/dev/null || true; echo "${cron_line}" ) > "${tmpfile}"
-    crontab "${tmpfile}"
-    rm -f "${tmpfile}"
-    echo "Added cron entry: ${cron_line}"
 }
 
 install_launchd() {
