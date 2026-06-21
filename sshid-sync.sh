@@ -49,6 +49,9 @@ validate_keys_file() {
     # Empty file is acceptable (manual keys file may be empty)
     [ -s "${file}" ] || return 0
 
+    # File containing only comments/blank lines is also acceptable
+    grep -qvE '^[[:space:]]*(#|$)' "${file}" || return 0
+
     # Prefer ssh-keygen if available
     if command -v ssh-keygen >/dev/null 2>&1; then
         if ssh-keygen -l -f "${file}" >/dev/null 2>&1; then
