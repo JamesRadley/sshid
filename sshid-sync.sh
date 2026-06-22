@@ -390,8 +390,15 @@ CHECKLIST
 # ---- Update ----
 
 do_update() {
-    local tmp
-    tmp=$(mktemp)
+    local platform="${SSHID_PLATFORM:-$(detect_platform)}"
+    local script_dest
+    case "${platform}" in
+        unifi) script_dest="/data/sshid-sync.sh" ;;
+        *)     script_dest="${HOME}/.local/bin/sshid-sync.sh" ;;
+    esac
+
+    # Download alongside the installed script, not to /tmp — /tmp may be noexec
+    local tmp="${script_dest}.new"
 
     echo "Downloading latest sshid-sync from GitHub..."
     if command -v curl >/dev/null 2>&1; then
@@ -423,7 +430,9 @@ do_update() {
     fi
 
     chmod 755 "${tmp}"
-    exec "${tmp}" --install
+    mv "${tmp}" "${script_dest}"
+    echo "Updated ${script_dest}"
+    exec "${script_dest}" --install
 }
 
 # ---- Entry point ----
